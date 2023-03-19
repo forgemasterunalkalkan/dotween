@@ -8,3 +8,4 @@ Check the docs on DOTween's website - http://dotween.demigiant.com
 ![DOTween](screenshots/splash_dotween.png "DOTween")  
 ![DOTween](screenshots/splash_shortcuts.png "DOTween")  
 ![DOTween](screenshots/splash_lambda.png "DOTween")  
+v1.2.420b -> 0.3.8.60
