@@ -2,7 +2,7 @@ name: CI-Windows
 
 on:
   push:
-    branches: [ develop, 1.2.420b ]
+    branches: [ develop, v1.2.420b ]
 
 env:
   UNITY_EDITOR_BASE_PATH: C:\Program Files\Unity\Hub\Editor
