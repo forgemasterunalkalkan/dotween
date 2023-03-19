@@ -35,7 +35,7 @@ namespace DG.Tweening
     public class DOTween
     {
         /// <summary>DOTween's version</summary>
-        public static readonly string Version = "1.2.632"; // Last version before modules: 1.1.755
+        public static readonly string Version = "1.2.690"; // Last version before modules: 1.1.755
 
         ///////////////////////////////////////////////
         // Options ////////////////////////////////////
@@ -54,9 +54,16 @@ namespace DG.Tweening
         /// Beware, this will slightly slow down your tweens while inside Unity Editor.
         /// <para>Default: FALSE</para></summary>
         public static bool showUnityEditorReport = false;
-        /// <summary>Global DOTween timeScale.
-        /// <para>Default: 1</para></summary>
+        /// <summary>Global DOTween global timeScale (default: 1).<para/>
+        /// The final timeScale of a non-timeScaleIndependent tween is:<para/>
+        /// <code>Unity's Time.timeScale * DOTween.timeScale * tween.timeScale</code><para/>
+        /// while the final timeScale of a timeScaleIndependent tween is:<para/>
+        /// <code>DOTween.unscaledTimeScale * DOTween.timeScale * tween.timeScale</code></summary>
         public static float timeScale = 1;
+        /// <summary>DOTween timeScale applied only to timeScaleIndependent tweens (default: 1).<para/>
+        /// The final timeScale of a timeScaleIndependent tween is:<para/>
+        /// <code>DOTween.unscaledTimeScale * DOTween.timeScale * tween.timeScale</code></summary>
+        public static float unscaledTimeScale = 1;
         /// <summary>If TRUE, DOTween will use Time.smoothDeltaTime instead of Time.deltaTime for UpdateType.Normal and UpdateType.Late tweens
         /// (unless they're set as timeScaleIndependent, in which case a value between the last timestep
         /// and <see cref="maxSmoothUnscaledTime"/> will be used instead).
@@ -211,6 +218,7 @@ namespace DG.Tweening
                 DOTween.safeModeLogBehaviour = settings.safeModeOptions.logBehaviour;
                 DOTween.nestedTweenFailureBehaviour = settings.safeModeOptions.nestedTweenFailureBehaviour;
                 DOTween.timeScale = settings.timeScale;
+                DOTween.unscaledTimeScale = settings.unscaledTimeScale;
                 DOTween.useSmoothDeltaTime = settings.useSmoothDeltaTime;
                 DOTween.maxSmoothUnscaledTime = settings.maxSmoothUnscaledTime;
                 DOTween.rewindCallbackMode = settings.rewindCallbackMode;
@@ -276,6 +284,7 @@ namespace DG.Tweening
             showUnityEditorReport = false;
             drawGizmos = true;
             timeScale = 1;
+            unscaledTimeScale = 1;
             useSmoothDeltaTime = false;
             maxSmoothUnscaledTime = 0.15f;
             rewindCallbackMode = RewindCallbackMode.FireIfPositionChanged;
@@ -325,7 +334,7 @@ namespace DG.Tweening
             InitCheck();
 //            instance.ManualUpdate(deltaTime, unscaledDeltaTime);
             if (TweenManager.hasActiveManualTweens) {
-                TweenManager.Update(UpdateType.Manual, deltaTime * DOTween.timeScale, unscaledDeltaTime * DOTween.timeScale);
+                TweenManager.Update(UpdateType.Manual, deltaTime * DOTween.timeScale, unscaledDeltaTime * DOTween.unscaledTimeScale * DOTween.timeScale);
             }
         }
 
@@ -577,11 +586,13 @@ namespace DG.Tweening
         /// Setting it to 0 will shake along a single direction and behave like a random punch.</param>
         /// <param name="ignoreZAxis">If TRUE only shakes on the X Y axis (looks better with things like cameras).</param>
         /// <param name="fadeOut">If TRUE the shake will automatically fadeOut smoothly within the tween's duration, otherwise it will not</param>
+        /// <param name="randomnessMode">Randomness mode</param>
         public static TweenerCore<Vector3, Vector3[], Vector3ArrayOptions> Shake(DOGetter<Vector3> getter, DOSetter<Vector3> setter, float duration,
-            float strength = 3, int vibrato = 10, float randomness = 90, bool ignoreZAxis = true, bool fadeOut = true
+            float strength = 3, int vibrato = 10, float randomness = 90, bool ignoreZAxis = true,
+            bool fadeOut = true, ShakeRandomnessMode randomnessMode = ShakeRandomnessMode.Full
         )
         {
-            return Shake(getter, setter, duration, new Vector3(strength, strength, strength), vibrato, randomness, ignoreZAxis, false, fadeOut);
+            return Shake(getter, setter, duration, new Vector3(strength, strength, strength), vibrato, randomness, ignoreZAxis, false, fadeOut, randomnessMode);
         }
         /// <summary>Shakes a Vector3 with the given values.</summary>
         /// <param name="getter">A getter for the field or property to tween.
@@ -594,14 +605,17 @@ namespace DG.Tweening
         /// <param name="randomness">Indicates how much the shake will be random (0 to 180 - values higher than 90 kind of suck, so beware). 
         /// Setting it to 0 will shake along a single direction and behave like a random punch.</param>
         /// <param name="fadeOut">If TRUE the shake will automatically fadeOut smoothly within the tween's duration, otherwise it will not</param>
+        /// <param name="randomnessMode">Randomness mode</param>
         public static TweenerCore<Vector3, Vector3[], Vector3ArrayOptions> Shake(DOGetter<Vector3> getter, DOSetter<Vector3> setter, float duration,
-            Vector3 strength, int vibrato = 10, float randomness = 90, bool fadeOut = true
+            Vector3 strength, int vibrato = 10, float randomness = 90,
+            bool fadeOut = true, ShakeRandomnessMode randomnessMode = ShakeRandomnessMode.Full
         )
         {
-            return Shake(getter, setter, duration, strength, vibrato, randomness, false, true, fadeOut);
+            return Shake(getter, setter, duration, strength, vibrato, randomness, false, true, fadeOut, randomnessMode);
         }
         static TweenerCore<Vector3, Vector3[], Vector3ArrayOptions> Shake(DOGetter<Vector3> getter, DOSetter<Vector3> setter, float duration,
-            Vector3 strength, int vibrato, float randomness, bool ignoreZAxis, bool vectorBased, bool fadeOut
+            Vector3 strength, int vibrato, float randomness, bool ignoreZAxis, bool vectorBased,
+            bool fadeOut, ShakeRandomnessMode randomnessMode
         )
         {
             float shakeMagnitude = vectorBased ? strength.magnitude : strength.x;
@@ -624,9 +638,22 @@ namespace DG.Tweening
             Vector3[] tos = new Vector3[totIterations];
             for (int i = 0; i < totIterations; ++i) {
                 if (i < totIterations - 1) {
-                    if (i > 0) ang = ang - 180 + UnityEngine.Random.Range(-randomness, randomness);
+                    Quaternion rndQuaternion = Quaternion.identity;
+                    switch (randomnessMode) {
+                    case ShakeRandomnessMode.Harmonic:
+                        if (i > 0) ang = ang - 180 + UnityEngine.Random.Range(0, randomness);
+                        if (vectorBased || !ignoreZAxis) {
+                            rndQuaternion = Quaternion.AngleAxis(UnityEngine.Random.Range(0, randomness), Vector3.up);
+                        }
+                        break;
+                    default: // Full
+                        if (i > 0) ang = ang - 180 + UnityEngine.Random.Range(-randomness, randomness);
+                        if (vectorBased || !ignoreZAxis) {
+                            rndQuaternion = Quaternion.AngleAxis(UnityEngine.Random.Range(-randomness, randomness), Vector3.up);
+                        }
+                        break;
+                    }
                     if (vectorBased) {
-                        Quaternion rndQuaternion = Quaternion.AngleAxis(UnityEngine.Random.Range(-randomness, randomness), Vector3.up);
                         Vector3 to = rndQuaternion * DOTweenUtils.Vector3FromAngle(ang, shakeMagnitude);
                         to.x = Vector3.ClampMagnitude(to, strength.x).x;
                         to.y = Vector3.ClampMagnitude(to, strength.y).y;
@@ -639,7 +666,6 @@ namespace DG.Tweening
                         if (ignoreZAxis) {
                             tos[i] = DOTweenUtils.Vector3FromAngle(ang, shakeMagnitude);
                         } else {
-                            Quaternion rndQuaternion = Quaternion.AngleAxis(UnityEngine.Random.Range(-randomness, randomness), Vector3.up);
                             tos[i] = rndQuaternion * DOTweenUtils.Vector3FromAngle(ang, shakeMagnitude);
                         }
                         if (fadeOut) shakeMagnitude -= decayXTween;
@@ -994,12 +1020,30 @@ namespace DG.Tweening
         }
 
         /// <summary>
-        /// Returns the total number of active tweens.
+        /// Returns the total number of active tweens (so both Tweeners and Sequences).
         /// A tween is considered active if it wasn't killed, regardless if it's playing or paused
         /// </summary>
         public static int TotalActiveTweens()
         {
             return TweenManager.totActiveTweens;
+        }
+
+        /// <summary>
+        /// Returns the total number of active Tweeners.
+        /// A Tweener is considered active if it wasn't killed, regardless if it's playing or paused
+        /// </summary>
+        public static int TotalActiveTweeners()
+        {
+            return TweenManager.totActiveTweeners;
+        }
+
+        /// <summary>
+        /// Returns the total number of active Sequences.
+        /// A Sequence is considered active if it wasn't killed, regardless if it's playing or paused
+        /// </summary>
+        public static int TotalActiveSequences()
+        {
+            return TweenManager.totActiveSequences;
         }
 
         /// <summary>
@@ -1009,6 +1053,17 @@ namespace DG.Tweening
         public static int TotalPlayingTweens()
         {
             return TweenManager.TotalPlayingTweens();
+        }
+
+        /// <summary>
+        /// Returns a the total number of active tweens with the given id.
+        /// </summary>
+        /// <param name="playingOnly">If TRUE returns only the tweens with the given ID that are currently playing</param>
+        public static int TotalTweensById(object id, bool playingOnly = false)
+        {
+            if (id == null) return 0;
+
+            return TweenManager.TotalTweensById(id, playingOnly);
         }
 
         /// <summary>

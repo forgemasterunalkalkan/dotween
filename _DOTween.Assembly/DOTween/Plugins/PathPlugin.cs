@@ -55,7 +55,8 @@ namespace DG.Tweening.Plugins
         // then sets the final path version
         public override void SetChangeValue(TweenerCore<Vector3, Path, PathOptions> t)
         {
-            Transform trans = ((Component)t.target).transform;
+            GameObject go = t.target as GameObject;
+            Transform trans = !(go is null) ? go.transform : ((Component)t.target).transform;
             // if (t.plugOptions.orientType == OrientType.ToPath && t.plugOptions.useLocalPosition) t.plugOptions.parent = trans.parent;
             if (t.plugOptions.orientType == OrientType.ToPath) t.plugOptions.parent = trans.parent;
 
@@ -116,8 +117,11 @@ namespace DG.Tweening.Plugins
             return changeValue.length / unitsXSecond;
         }
 
-        public override void EvaluateAndApply(PathOptions options, Tween t, bool isRelative, DOGetter<Vector3> getter, DOSetter<Vector3> setter, float elapsed, Path startValue, Path changeValue, float duration, bool usingInversePosition, UpdateNotice updateNotice)
-        {
+        public override void EvaluateAndApply(
+            PathOptions options, Tween t, bool isRelative, DOGetter<Vector3> getter, DOSetter<Vector3> setter,
+            float elapsed, Path startValue, Path changeValue, float duration, bool usingInversePosition, int newCompletedSteps,
+            UpdateNotice updateNotice
+        ){
             if (t.loopType == LoopType.Incremental && !options.isClosedPath) {
                 int increment = (t.isComplete ? t.completedLoops - 1 : t.completedLoops);
                 if (increment > 0) changeValue = changeValue.CloneIncremental(increment);
@@ -148,10 +152,26 @@ namespace DG.Tweening.Plugins
                     }
                     if (isBackwards) {
 //                        for (int i = prevWPIndex - 1; i > newWaypointIndex - 1; --i) Tween.OnTweenCallback(t.onWaypointChange, i);
-                        for (int i = prevWPIndex - 1; i > newWaypointIndex - 1; --i) Tween.OnTweenCallback(t.onWaypointChange, t, i);
+                        for (int i = prevWPIndex - 1; i > newWaypointIndex - 1; --i) {
+                            if (i != newWaypointIndex) Tween.OnTweenCallback(t.onWaypointChange, t, i);
+                        }
                     } else {
 //                        for (int i = prevWPIndex + 1; i < newWaypointIndex + 1; ++i) Tween.OnTweenCallback(t.onWaypointChange, i);
-                        for (int i = prevWPIndex + 1; i < newWaypointIndex; ++i) Tween.OnTweenCallback(t.onWaypointChange, t, i);
+                        for (int i = prevWPIndex + 1; i < newWaypointIndex; ++i) 
+                            if (i != newWaypointIndex) Tween.OnTweenCallback(t.onWaypointChange, t, i);
+                    }
+                    if (newCompletedSteps > 0 && !t.isComplete) {
+                        int stepWaypointIndex;
+                        if (t.loopType == LoopType.Yoyo) {
+                            stepWaypointIndex = t.completedLoops % 2 != 0 && !t.isBackwards
+                                ? changeValue.wps.Length - 1
+                                : 0;
+                        } else {
+                            stepWaypointIndex = !t.isBackwards
+                                ? changeValue.wps.Length - 1
+                                : 0;
+                        }
+                        if (stepWaypointIndex != newWaypointIndex) Tween.OnTweenCallback(t.onWaypointChange, t, stepWaypointIndex);
                     }
                     Tween.OnTweenCallback(t.onWaypointChange, t, newWaypointIndex);
                 }
@@ -161,7 +181,8 @@ namespace DG.Tweening.Plugins
         // Public so it can be called by GotoWaypoint
         public void SetOrientation(PathOptions options, Tween t, Path path, float pathPerc, Vector3 tPos, UpdateNotice updateNotice)
         {
-            Transform trans = ((Component)t.target).transform;
+            GameObject go = t.target as GameObject;
+            Transform trans = !(go is null) ? go.transform : ((Component)t.target).transform;
             Quaternion newRot = Quaternion.identity;
             Vector3 transP = trans.position;
 

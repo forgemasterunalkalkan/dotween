@@ -27,6 +27,7 @@ ExternalPluginsTestsAndExamples*
 *.Unity*/Assets/_DOTween Pro Examples
 *.Unity*/Assets/_Tests PRO*
 .vs
+.idea
 *DOTweenPro
 *DOTweenPro.*
 *DemiLib
@@ -49,8 +50,16 @@ UnityTests.Unity5 - LastVersionBeforeModules
 UnityTests.Unity2020
 ModulesTest.Unity2018
 packageManagerTests
+promotionKeys
 biz
 screenshots
 zzTemp*
 
 _DOTween.Timeline
+
+Package/**/*.cs
+Package/**/*.dll
+Package/**/*.dll.mdb
+Package/**/*.xml
+Package/**/*.jpg
+Package/**/*.png
